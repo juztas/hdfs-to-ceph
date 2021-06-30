@@ -1,0 +1,46 @@
+1. Did you cleaned everything unneeded under  /store/user?
+    if yes - go to step 2, if no - ask to clean;
+
+2. Admin disables write access for user on HDFS:
+   cd /mnt/hadoop/store/user/
+   chown -R nobody:nobody jbalcas/
+   chmod -R 755 jbalcas/
+
+3. Create proxy:
+voms-proxy-init -voms cms --valid 192:00 -cert ~/.globus/usercert.pem -key ~/.globus/userkey.pem -rfc
+voms-proxy-info -all
+
+4. Ask user to test gfal stageout to his user's directory.
+fallocate -l 1M /tmp/test-240521-cmantill
+gfal-copy /tmp/test-240521-cmantill gsiftp://transfer-lb.ultralight.org/storage/cms/store/user/cmantill/test-240521
+
+5. Start migration:
+/storage/other/MIGRATION/migrator.sh /store/user/cmantill
+
+6. Relax and let the system do it's job. Once done, run the following command:
+/storage/other/MIGRATION/fts-status-checker.sh
+Check whichever is shown as failed or finisheddirty
+
+
+# For admin to get a full dump of Ceph FS Files for particular user/group
+find /storage/cms/store/user/jbalcas/ -type f -printf '%p\t%s\n' | cut -c 13- &> allCeph
+cat allCeph | sort &> ceph_sorted
+# Same command but to get dump from hdfs
+find /mnt/hadoop/store/user/jbalcas/ -type f -printf '%p\t%s\n' | cut -c 12- &> allHdfs
+cat allHdfs | sort &> hdfs_sorted
+
+To compare files on hdfs with files on ceph:
+rsync --progress -rvnc /mnt/hadoop/store/user/jbalcas/ root@transfer-10:/storage/cms/store/user/jbalcas/
+
+To overwrite all files from hdfs on ceph which are different:
+rsync --progress -a /mnt/hadoop/store/user/jbalcas/ root@transfer-10:/storage/cms/store/user/jbalcas/
+
+To split rsync and speed up:
+for d in /mnt/hadoop/store/group/phys_exotica/jmao/*; do echo rsync --progress -a "$d" root@transfer-10:/storage/cms/store/group/phys_exotica/jmao/; done
+# Need to replce hostname and add & at the end;
+
+
+
+
+
+

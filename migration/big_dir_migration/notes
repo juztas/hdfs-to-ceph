@@ -1,0 +1,62 @@
+[root@login-1 big_dir_migration]# cat ../notes
+1. Did you cleaned everything unneeded under  /store/user?
+    if yes - go to step 2, if no - ask to clean;
+
+2. Admin disables write access for user on HDFS:
+   cd /mnt/hadoop/store/user/
+   chown -R nobody:nobody jbalcas/
+   chmod -R 755 jbalcas/
+
+3. Create proxy:
+voms-proxy-init -voms cms --valid 192:00 -cert ~/.globus/usercert.pem -key ~/.globus/userkey.pem -rfc
+voms-proxy-info -all
+
+4. Ask user to test gfal stageout to his user's directory.
+fallocate -l 1M /tmp/test-migr-$USER
+gfal-copy /tmp/test-migr-$USER gsiftp://transfer-lb.ultralight.org/storage/cms/store/user/$USER/test-migr-$USER
+
+5. Start migration:
+Because of too many files, migration will have to be done in slow submission mode:
+mkdir ~/MIGRATION/
+cd ~/MIGRATION/
+touch allCeph
+hdfs dfs -ls -R /store/user/$USER/ &> allHdfs
+cp /storage/af/other/MIGRATION/big_dir_migration/find_diff.py .
+mkdir missing/
+python find_diff.py &> missing/missing
+cd missing;
+head -10 missing;
+cat missing | wc -l
+split -l 10000 missing newtransfers
+ls -laht
+cat newtransfersaa | wc -l
+head -10 newtransfersaa
+rm -f missing
+cd ~/MIGRATION/
+cp /storage/af/other/MIGRATION/big_dir_migration/migrator.py .
+screen
+python migrator.py /storage/af/user/$USER/MIGRATION/missing/
+Ctrl + A + D
+
+# For admin to get a full dump of Ceph FS Files for particular user/group
+find /storage/cms/store/user/jbalcas/ -type f -printf '%p\t%s\n' | cut -c 13- &> allCeph
+cat allCeph | sort &> ceph_sorted
+# Same command but to get dump from hdfs
+find /mnt/hadoop/store/user/jbalcas/ -type f -printf '%p\t%s\n' | cut -c 12- &> allHdfs
+cat allHdfs | sort &> hdfs_sorted
+
+To compare files on hdfs with files on ceph:
+rsync --progress -rvnc /mnt/hadoop/store/user/jbalcas/ root@transfer-10:/storage/cms/store/user/jbalcas/
+
+To overwrite all files from hdfs on ceph which are different:
+rsync --progress -a /mnt/hadoop/store/user/jbalcas/ root@transfer-10:/storage/cms/store/user/jbalcas/
+
+To split rsync and speed up:
+for d in /mnt/hadoop/store/group/phys_exotica/jmao/*; do echo rsync --progress -a "$d" root@transfer-10:/storage/cms/store/group/phys_exotica/jmao/; done
+# Need to replce hostname and add & at the end;
+
+
+
+
+
+
